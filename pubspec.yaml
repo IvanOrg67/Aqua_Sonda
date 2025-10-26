@@ -1,0 +1,32 @@
+name: mi_app
+description: App Flutter local con backend Node + MySQL
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  shared_preferences: ^2.2.3
+  fl_chart: ^0.68.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/image-1ZoixW91pByrJkUhBuYXIKBFXjMjOG.png
+    - assets/images/image-MLydriTvlAs4FTjrB06WvnQWBE2Ykm.png
+    - assets/images/image-OyC5XxX4C1kljpUjzBKrYjySGLjptr.png
+    - assets/images/image-Q2HqrMQ9tDGrL02AsUSfcjdt6CR3j4.png
+    - assets/images/image-uMEYLuXPNs6uobZLiISvXPlB6lf5xA.png
+    - assets/images/image-zic2IxV5JIcwZNDbfSGoqTQabspXOK.png
+    - assets/images/pulpo.png
+    - assets/images/image-aNvpXQcowFLBnfeDs2JfYaMI2hEiM5.png
