@@ -5,8 +5,6 @@ import 'services/api_installaciones_service.dart';
 import 'services/api_user_service.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/settings_sheet.dart';
-// Si tu modelo está en otra ruta, descomenta y ajusta:
-// import 'models/instalacion.dart';
 
 class PantallaHome extends StatefulWidget {
   const PantallaHome({super.key});
@@ -17,7 +15,7 @@ class PantallaHome extends StatefulWidget {
 
 class _PantallaHomeState extends State<PantallaHome> {
   final _apiInst = ApiInstalacionesService();
-  int _reload = 0; // para refrescar FutureBuilder tras crear instalación
+  int _reload = 0;
 
   Future<void> _confirmEliminarInstalacion(Instalacion it) async {
     final scheme = Theme.of(context).colorScheme;
@@ -65,16 +63,8 @@ class _PantallaHomeState extends State<PantallaHome> {
     bool loading = false;
     String? errorText;
 
-    // IDs mínimos de ejemplo (ajusta con los tuyos reales /api/seed/min)
+    // CAMBIO: usar idEmpresaSucursal
     int idEmpresaSucursal = 1;
-  // int idProceso = 1; // no usado por ahora
-
-    String fechaHoy() {
-      final now = DateTime.now();
-      return '${now.year.toString().padLeft(4, '0')}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
-    }
 
     await showDialog(
       context: context,
@@ -89,12 +79,10 @@ class _PantallaHomeState extends State<PantallaHome> {
                 errorText = null;
               });
               try {
+                // CAMBIO: usar nuevo método crear simplificado
                 await _apiInst.crear(
-                  idEmpresa: idEmpresaSucursal,
+                  idEmpresaSucursal: idEmpresaSucursal,
                   nombre: nombreCtrl.text.trim(),
-                  fechaInstalacion: fechaHoy(),
-                  estado: 'activo',
-                  uso: 'acuicultura',
                   descripcion: descCtrl.text.trim(),
                 );
                 if (!mounted) return;
@@ -333,11 +321,11 @@ class _PantallaHomeState extends State<PantallaHome> {
                               arguments: {
                                 'id_instalacion': it.id,
                                 'nombre_instalacion': it.nombre,
-                                'estado_operativo': it.estado,
-                                'id_empresa': it.idEmpresa,
+                                'estado_operativo': 'activo', // CAMBIO: valor fijo
+                                'id_empresa_sucursal': it.idEmpresaSucursal, // CAMBIO
                                 'descripcion': it.descripcion,
-                                'fecha_instalacion': it.fechaInstalacion,
-                                'tipo_uso': it.uso,
+                                'fecha_creacion': it.fechaCreacion, // CAMBIO
+                                'tipo_uso': 'acuicultura', // CAMBIO: valor fijo
                               },
                             ),
                             onLongPress: () => _confirmEliminarInstalacion(it),
@@ -390,8 +378,6 @@ class _PantallaHomeState extends State<PantallaHome> {
     );
   }
 }
-
-// Ajustes y cambio de contraseña se factorizaron a widgets/settings_sheet.dart
 
 class _StatusRow extends StatelessWidget {
   final String label;
@@ -478,6 +464,7 @@ class GaugeSection extends StatelessWidget {
     );
   }
 }
+
 class _InstalacionCard extends StatelessWidget {
   final Instalacion instalacion;
   final VoidCallback onTap;
@@ -492,11 +479,10 @@ class _InstalacionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
     final cardW = (w * 0.72).clamp(260.0, 360.0);
-    final h = (cardW * 0.56).clamp(150.0, 200.0); // proporción 16:9 aprox
+    final h = (cardW * 0.56).clamp(150.0, 200.0);
 
-  final estado =
-    instalacion.estado.isEmpty ? '—' : instalacion.estado;
-    // Como el modelo no trae 'sensores', mantenemos el diseño con 0:
+    // CAMBIO: usar displayLocation de la nueva clase
+    final estado = 'activo'; // valor por defecto
     final sensores = 0;
 
     return InkWell(
@@ -571,17 +557,13 @@ class _InstalacionCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-          color: (estado == 'activo'
-            ? Theme.of(context).colorScheme.tertiaryContainer
-            : Theme.of(context).colorScheme.errorContainer),
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   estado,
                   style: TextStyle(
-                    color: estado == 'activo'
-                        ? Theme.of(context).colorScheme.onTertiaryContainer
-                        : Theme.of(context).colorScheme.onErrorContainer,
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),

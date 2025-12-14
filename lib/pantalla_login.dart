@@ -88,10 +88,10 @@ class _PantallaLoginState extends State<PantallaLogin>
     // Escala base por tamaño de dispositivo
     final scale = (shortest / 400).clamp(0.9, 1.6);
 
-    // Ancho máximo para que el contenido central no “flote” en tablet
+    // Ancho máximo para que el contenido central no "flote" en tablet
     final maxContentWidth = isLandscape ? 580.0 : 420.0;
 
-    // Zona “limpia” central para evitar que los PNG tapen texto/botones
+    // Zona "limpia" central para evitar que los PNG tapen texto/botones
     final safeTop = isLandscape ? 24.0 : 48.0;
     final safeBottom = isLandscape ? 24.0 : 80.0;
     final safeHorizontal = 24.0;
@@ -342,7 +342,7 @@ class _PantallaLoginState extends State<PantallaLogin>
                             height: (54 * scale).clamp(48, 64),
                             child: OutlinedButton(
                               onPressed: () =>
-                                  Navigator.pushNamed(context, '/registro'),
+                                  Navigator.pushNamed(context, '/register'),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(
                                     color: Colors.white24, width: 1),
@@ -370,7 +370,7 @@ class _PantallaLoginState extends State<PantallaLogin>
 
   // ===== Helpers de animación =====
 
-  // Aplica un “flotado” senoidal al child
+  // Aplica un "flotado" senoidal al child
   Widget _floating({
     required double ampX,
     required double ampY,

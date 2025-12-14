@@ -12,12 +12,11 @@ class PantallaInstalaciones extends StatefulWidget {
   State<PantallaInstalaciones> createState() => _PantallaInstalacionesState();
 }
 
-
 class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
   final _api = ApiInstalacionesService();
   late Future<List<Instalacion>> _future;
   static const String _cardBg =
-      'assets/images/image-aNvpXQcowFLBnfeDs2JfYaMI2hEiM5.png'; // fondo de cada tarjeta
+      'assets/images/image-aNvpXQcowFLBnfeDs2JfYaMI2hEiM5.png';
 
   @override
   void initState() {
@@ -79,8 +78,6 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
     final gridCount = isTablet ? 2 : 1;
     final cardHeight = isTablet ? 220.0 : 200.0;
 
-  // Future gestionado en estado para poder refrescar tras eliminar
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Instalaciones'),
@@ -126,7 +123,7 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
             padding: const EdgeInsets.all(16),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: gridCount,
-              childAspectRatio: (16 / 9), // tarjetas panorámicas
+              childAspectRatio: (16 / 9),
               mainAxisSpacing: 14,
               crossAxisSpacing: 14,
             ),
@@ -138,18 +135,18 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
                 height: cardHeight,
                 backgroundAsset: _cardBg,
                 onTap: () {
-                  // 👉 tu modelo no tiene toJson(); armamos un Map con campos reales
+                  // CAMBIO: usar nuevos nombres de campos
                   Navigator.pushNamed(
                     context,
                     '/instalacion',
                     arguments: {
                       'id_instalacion': it.id,
                       'nombre_instalacion': it.nombre,
-                      'estado_operativo': it.estado,
-                      'id_empresa': it.idEmpresa,
+                      'estado_operativo': 'activo', // valor por defecto
+                      'id_empresa_sucursal': it.idEmpresaSucursal, // CAMBIO
                       'descripcion': it.descripcion,
-                      'fecha_instalacion': it.fechaInstalacion,
-                      'tipo_uso': it.uso,
+                      'fecha_creacion': it.fechaCreacion, // CAMBIO
+                      'tipo_uso': 'acuicultura', // valor por defecto
                     },
                   );
                 },
@@ -160,19 +157,23 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: crear instalación (formulario propio)
-          // Si quieres crear aquí, usa:
-          // await api.crear(
-          //   idEmpresaSucursal: 1, // IDs reales de /api/seed/min
-          //   idProceso: 1,
-          //   nombreInstalacion: 'Estanque X',
-          //   fechaInstalacion: '2025-09-07',
-          //   estadoOperativo: 'activo',
-          //   tipoUso: 'acuicultura',
-          //   descripcion: 'Demo',
-          // );
-          // y luego setState/refresh (si cambias a Stateful).
+        onPressed: () async {
+          // CAMBIO: implementar creación directa
+          try {
+            await _api.crear(
+              idEmpresaSucursal: 1,
+              nombre: 'Nueva Instalación',
+              descripcion: 'Instalación creada desde lista',
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Instalación creada')),
+            );
+            await _refresh();
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $e')),
+            );
+          }
         },
         icon: const Icon(Icons.add),
         label: const Text('Nueva instalación'),
@@ -223,7 +224,7 @@ class _InstalacionCard extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(color: Colors.blueGrey),
               ),
-              // Degradado para legibilidad (suave y dependiente de tema)
+              // Degradado para legibilidad
               Builder(builder: (context) {
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 return Container(
@@ -266,17 +267,13 @@ class _InstalacionCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-              color: ((instalacion.estado.isEmpty ? '—' : instalacion.estado) == 'activo'
-                ? Theme.of(context).colorScheme.tertiaryContainer
-                : Theme.of(context).colorScheme.errorContainer),
+                          color: Theme.of(context).colorScheme.tertiaryContainer,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          instalacion.estado.isEmpty ? '—' : instalacion.estado,
+                          'activo', // CAMBIO: valor por defecto
                           style: TextStyle(
-                            color: instalacion.estado == 'activo'
-                                ? Theme.of(context).colorScheme.onTertiaryContainer
-                                : Theme.of(context).colorScheme.onErrorContainer,
+                            color: Theme.of(context).colorScheme.onTertiaryContainer,
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
                           ),
@@ -314,7 +311,7 @@ class _InstalacionCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  instalacion.descripcion.isNotEmpty ? instalacion.descripcion : '—',
+                                  instalacion.displayLocation, // CAMBIO: usar displayLocation
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'api_installaciones_service.dart'; // Para validar sesión
 
 class UsuarioDto {
   final int idUsuario;
@@ -37,8 +38,6 @@ class ApiUserService {
     String? telefono,
     int idRol = 2,
   }) async {
-    // Seguridad defensiva: si por alguna razón llega un id de rol no permitido,
-    // lo forzamos a uno válido (2=admin_cuenta, 3=visor).
     if (idRol == 1) {
       idRol = 2;
     }
@@ -74,15 +73,30 @@ class ApiUserService {
   }
 
   Future<void> logout() => _api.clearToken();
+  
   Future<String?> currentToken() => _api.getToken();
 
+  // NUEVO: Método para validar si la sesión actual es válida
+  Future<bool> validateCurrentSession() async {
+    try {
+      final token = await currentToken();
+      if (token == null || token.isEmpty) return false;
+
+      // Hacer una petición autenticada simple para probar el token
+      final installacionService = ApiInstalacionesService();
+      await installacionService.listar();
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<void> changePassword({
-    required String correo,
     required String currentPassword,
     required String newPassword,
   }) async {
     final res = await _api.post('/auth/change-password', body: {
-      'correo': correo,
       'currentPassword': currentPassword,
       'newPassword': newPassword,
     });

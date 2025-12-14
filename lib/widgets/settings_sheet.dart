@@ -158,14 +158,9 @@ Future<void> showChangePasswordDialog(BuildContext context, {String? correo}) as
                 ? null
                 : () async {
                     if (!formKey.currentState!.validate()) return;
-                    if (correo == null || correo.isEmpty) {
-                      setLocal(() => error = 'No se pudo determinar el correo');
-                      return;
-                    }
                     setLocal(() { loading = true; error = null; });
                     try {
                       await ApiUserService().changePassword(
-                        correo: correo,
                         currentPassword: currentCtrl.text,
                         newPassword: newCtrl.text,
                       );
@@ -175,12 +170,26 @@ Future<void> showChangePasswordDialog(BuildContext context, {String? correo}) as
                         await ApiUserService().logout();
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Contraseña actualizada. Vuelve a iniciar sesión.')),
+                          const SnackBar(
+                            content: Text('Contraseña actualizada exitosamente. Por seguridad, vuelve a iniciar sesión.'),
+                            duration: Duration(seconds: 4),
+                          ),
                         );
                         await Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
                       }
                     } catch (e) {
-                      setLocal(() { loading = false; error = e.toString(); });
+                      // Extraer mensaje de error más legible
+                      String errorMsg = e.toString();
+                      if (errorMsg.contains('Contraseña actual incorrecta')) {
+                        errorMsg = 'La contraseña actual es incorrecta';
+                      } else if (errorMsg.contains('diferente a la actual')) {
+                        errorMsg = 'La nueva contraseña debe ser diferente a la actual';
+                      } else if (errorMsg.contains('al menos 6 caracteres')) {
+                        errorMsg = 'La contraseña debe tener al menos 6 caracteres';
+                      } else if (errorMsg.contains('401') || errorMsg.contains('403') || errorMsg.contains('Token')) {
+                        errorMsg = 'Sesión expirada. Por favor, inicia sesión nuevamente';
+                      }
+                      setLocal(() { loading = false; error = errorMsg; });
                     }
                   },
             child: loading

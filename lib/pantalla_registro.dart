@@ -1,7 +1,5 @@
-// lib/pantalla_registro.dart
 import 'package:flutter/material.dart';
 import 'services/api_user_service.dart';
-import 'theme/theme_controller.dart';
 
 class PantallaRegistro extends StatefulWidget {
   const PantallaRegistro({super.key});
@@ -12,187 +10,128 @@ class PantallaRegistro extends StatefulWidget {
 
 class _PantallaRegistroState extends State<PantallaRegistro> {
   final _formKey = GlobalKey<FormState>();
-  final _api = ApiUserService();
-
-  String nombre = '';
-  String correo = '';
-  String password = '';
-  String telefono = '';
-  bool cargando = false;
-  int? idRol = 2;
-  // Removemos 'super_admin' del listado de roles disponibles
-  final roles = const [
-    {'id': 2, 'nombre': 'admin_cuenta'},
-    {'id': 3, 'nombre': 'visor'},
-  ];
+  final _nombreCtrl = TextEditingController();
+  final _correoCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _telCtrl = TextEditingController();
+  bool _loading = false;
+  String? _error;
 
   Future<void> _registrar() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => cargando = true);
-    if (idRol == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona un tipo de rol')),
-      );
-      setState(() => cargando = false);
-      return;
-    }
+    setState(() { _loading = true; _error = null; });
     try {
-      await _api.register(
-        nombreCompleto: nombre.trim(),
-        correo: correo.trim(),
-        password: password,
-        idRol: idRol!,
-        telefono: telefono.trim().isEmpty ? null : telefono.trim(),
+      final user = await ApiUserService().register(
+        nombreCompleto: _nombreCtrl.text.trim(),
+        correo: _correoCtrl.text.trim(),
+        password: _passCtrl.text,
+        telefono: _telCtrl.text.isEmpty ? null : _telCtrl.text.trim(),
+        idRol: 2, // admin_cuenta por defecto (compatible con backend)
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registro exitoso')),
+      // Ir directo al home con sesión iniciada
+      Navigator.pushReplacementNamed(
+        context,
+        '/home',
+        arguments: {
+          'nombre': user.nombre,
+          'rol': 'Usuario',
+          'correo': user.correo,
+        },
       );
-      Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al registrarse: $e')),
-      );
+      setState(() { _error = e.toString(); });
     } finally {
-      if (mounted) setState(() => cargando = false);
+      if (mounted) setState(() { _loading = false; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context);
-    final isDark = base.brightness == Brightness.dark;
-    final formTheme = base.copyWith(
-      // No forzamos fondo claro; dejamos que el tema global maneje el fondo
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: Colors.transparent,
-        foregroundColor: base.colorScheme.onSurface,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      inputDecorationTheme: base.inputDecorationTheme.copyWith(
-        filled: true,
-    fillColor: isDark
-      ? base.colorScheme.surfaceContainerHighest.withValues(alpha: 0.24)
-      : const Color(0xFFF3F4F6),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: base.colorScheme.outlineVariant),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: base.colorScheme.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: base.colorScheme.primary),
-        ),
-      ),
-    );
-
-    return Theme(
-      data: formTheme,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Registro'),
-          actions: [
-            IconButton(
-              tooltip: 'Alternar tema',
-              onPressed: () => ThemeController.instance.toggle(),
-              icon: Builder(
-                builder: (context) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Icon(isDark ? Icons.light_mode : Icons.dark_mode);
-                },
-              ),
-            ),
-          ],
-        ),
-        body: Center(
-          child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Crear cuenta')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Form(
               key: _formKey,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: ListView(
+                shrinkWrap: true,
                 children: [
-                  DropdownButtonFormField<int>(
-                    decoration: const InputDecoration(
-                      labelText: "Tipo de rol",
-                      border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Regístrate',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    initialValue: idRol,
-                    items: roles
-                        .map((r) => DropdownMenuItem<int>(
-                              value: r['id'] as int,
-                              child: Text(r['nombre'] as String),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => idRol = v),
-                    validator: (v) => v == null ? "Selecciona un rol" : null,
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    controller: _nombreCtrl,
                     decoration: const InputDecoration(
-                      labelText: "Nombre",
-                      border: OutlineInputBorder(),
+                      labelText: 'Nombre completo',
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
-                    textInputAction: TextInputAction.next,
-                    onChanged: (v) => nombre = v,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? "Ingresa tu nombre"
-                        : null,
+                    validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: "Correo",
-                      border: OutlineInputBorder(),
-                    ),
+                    controller: _correoCtrl,
                     keyboardType: TextInputType.emailAddress,
-                    onChanged: (v) => correo = v,
-                    validator: (v) => (v == null || !v.contains('@'))
-                        ? "Correo inválido"
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
                     decoration: const InputDecoration(
-                      labelText: "Teléfono (opcional)",
-                      border: OutlineInputBorder(),
+                      labelText: 'Correo',
+                      hintText: 'tucorreo@dominio.com',
+                      prefixIcon: Icon(Icons.alternate_email),
                     ),
-                    keyboardType: TextInputType.phone,
-                    onChanged: (v) => telefono = v,
+                    validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Ingresa tu correo' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    controller: _passCtrl,
                     decoration: const InputDecoration(
-                      labelText: "Contraseña",
-                      border: OutlineInputBorder(),
+                      labelText: 'Contraseña',
+                      prefixIcon: Icon(Icons.lock_outline),
                     ),
                     obscureText: true,
-                    onChanged: (v) => password = v,
-                    validator: (v) => (v == null || v.length < 4)
-                        ? "Mínimo 4 caracteres"
-                        : null,
+                    validator: (v) =>
+                      (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: cargando ? null : _registrar,
-                      child: Text(cargando ? 'Creando...' : 'Crear cuenta'),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _telCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Teléfono (opcional)',
+                      prefixIcon: Icon(Icons.phone_outlined),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_error != null)
+                    Text(_error!,
+                      style: TextStyle(color: cs.error),
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loading ? null : _registrar,
+                    child: _loading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Crear cuenta'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _loading ? null : () {
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                    child: const Text('Ya tengo cuenta, iniciar sesión'),
                   ),
                 ],
               ),
-            ),
             ),
           ),
         ),

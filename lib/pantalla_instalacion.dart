@@ -10,6 +10,7 @@ import 'widgets/water_tank.dart';
 import 'widgets/mini_line_chart.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'pantalla_tareas.dart';
+import 'pantalla_sensores_gestion.dart';
 
 /// Pantalla de detalle de una instalación con vistas que imitan tus mockups.
 class PantallaInstalacion extends StatefulWidget {
@@ -73,16 +74,38 @@ class _PantallaInstalacionState extends State<PantallaInstalacion>
         ],
       ),
       floatingActionButton: idInstalacion != null
-          ? FloatingActionButton.extended(
-              icon: const Icon(Icons.schedule),
-              label: const Text('Tareas programadas'),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PantallaTareas(idInstalacion: idInstalacion),
-                  ),
-                );
-              },
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'sensores_fab',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PantallaSensoresGestion(
+                          idInstalacion: idInstalacion,
+                          nombreInstalacion: nombre,
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Icon(Icons.sensors),
+                  tooltip: 'Gestionar sensores',
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'tareas_fab',
+                  icon: const Icon(Icons.schedule),
+                  label: const Text('Tareas'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PantallaTareas(idInstalacion: idInstalacion),
+                      ),
+                    );
+                  },
+                ),
+              ],
             )
           : null,
     );
