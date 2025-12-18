@@ -3,27 +3,22 @@ import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 
 import 'pantalla_login.dart';
-import 'pantalla_sesion.dart';
 import 'pantalla_registro.dart';
 import 'pantalla_home.dart';
-import 'pantalla_tareas.dart';
 import 'pantalla_parametro_detalle.dart';
-import 'pantalla_sensores.dart';
+import 'pantalla_procesos.dart';
+import 'pantalla_especies.dart';
+import 'services/database_auth_service.dart';
 
 // DA ALIAS A CADA LIBRERÍA PARA EVITAR CHOQUE DE NOMBRES
 import 'pantalla_instalacion.dart' as det; // detalle (singular)
 import 'pantalla_instalaciones.dart' as lista; // listado (plural)
-import 'pantalla_instalacion_detalle.dart'; // wrapper opcional
-
-// Importar servicios necesarios para persistencia de sesión
-import 'services/api_user_service.dart';
-import 'services/api_installaciones_service.dart';
 
 void main() async {
   // ✅ CRÍTICO: Inicializar bindings antes de usar async
   WidgetsFlutterBinding.ensureInitialized();
   
-  // ✅ NUEVO: Inicializar el controlador de tema
+  // ✅ Inicializar el controlador de tema
   await ThemeController.instance.init();
   
   runApp(const MiApp());
@@ -47,39 +42,19 @@ class MiApp extends StatelessWidget {
           routes: {
             '/': (context) => const PantallaLogin(),
             '/login': (context) => const PantallaLogin(),
-            '/sesion': (context) => const PantallaSesion(),
             '/registro': (context) => const PantallaRegistro(),
             '/register': (context) => const PantallaRegistro(),
             '/home': (context) => const PantallaHome(),
 
-            // usa el alias 'lista' para la pantalla de LISTADO
+            // Instalaciones
             '/instalaciones': (context) => const lista.PantallaInstalaciones(),
-
-            // usa el alias 'det' para la pantalla de DETALLE (sin const)
             '/instalacion': (context) => det.PantallaInstalacion(),
-
-            // Wrapper opcional
-            '/instalacion_detalle': (context) => const PantallaInstalacionDetalle(),
-            '/instalacion-detalle': (context) => const PantallaInstalacionDetalle(),
             
-            // Ruta tareas con parámetros
-            '/tareas': (context) {
-              final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-              final idInstalacion = args?['idInstalacion'] ?? args?['id_instalacion'] ?? 0;
-              return PantallaTareas(idInstalacion: idInstalacion);
-            },
-
-            // ✅ NUEVO: Ruta de sensores con parámetros
-            '/sensores': (context) {
-              final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-              final idInstalacion = args?['idInstalacion'] ?? args?['id_instalacion'] ?? 0;
-              final nombreInstalacion = args?['nombreInstalacion'] ?? args?['nombre_instalacion'] ?? 'Instalación';
-              return PantallaSensores(
-                idInstalacion: idInstalacion,
-                nombreInstalacion: nombreInstalacion,
-              );
-            },
+            // Gestión de datos
+            '/procesos': (context) => const PantallaProcesos(),
+            '/especies': (context) => const PantallaEspecies(),
             
+            // Parámetros
             '/parametro-detalle': (context) => const PantallaParametroDetalle(),
           },
         );
@@ -140,23 +115,28 @@ class _SplashScreenState extends State<SplashScreen>
       // Esperar que termine la animación inicial
       await Future.delayed(const Duration(milliseconds: 2000));
       
-      final token = await ApiUserService().currentToken();
+      final authService = DatabaseAuthService();
       
-      if (token == null || token.isEmpty) {
+      // Cargar sesión guardada de SharedPreferences
+      await authService.loadSession();
+      
+      final currentUser = authService.currentUser;
+      
+      if (currentUser == null) {
         if (!mounted) return;
         _navigateToLogin();
         return;
       }
 
-      // Validar token haciendo una petición
-      final isValid = await _validateToken();
+      // Usuario autenticado, obtener datos actualizados
+      final userData = await authService.getUserData(authService.currentUserId!);
       
       if (!mounted) return;
       
-      if (isValid) {
-        _navigateToHome();
+      if (userData != null) {
+        _navigateToHome(userData);
       } else {
-        await ApiUserService().logout();
+        authService.logout();
         _navigateToLogin();
       }
     } catch (e) {
@@ -166,26 +146,15 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  Future<bool> _validateToken() async {
-    try {
-      final installacionService = ApiInstalacionesService();
-      await installacionService.listar();
-      return true;
-    } catch (e) {
-      debugPrint('Error validando token: $e');
-      return false;
-    }
-  }
-
   void _navigateToLogin() {
     Navigator.pushReplacementNamed(context, '/login');
   }
 
-  void _navigateToHome() {
+  void _navigateToHome([Map<String, dynamic>? userData]) {
     Navigator.pushReplacementNamed(context, '/home', arguments: {
-      'nombre': 'Usuario',
-      'rol': 'Usuario',
-      'correo': null,
+      'nombre': userData?['nombre_completo'] ?? 'Usuario',
+      'rol': userData?['roles']?['nombre_rol'] ?? 'Usuario',
+      'correo': userData?['correo'] ?? '',
     });
   }
 

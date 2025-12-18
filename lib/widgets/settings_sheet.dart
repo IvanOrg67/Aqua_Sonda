@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api_user_service.dart';
+import '../services/database_auth_service.dart';
 
 Future<void> openSettingsSheet(BuildContext context, {String? correo}) async {
   showModalBottomSheet(
@@ -84,7 +84,7 @@ Future<void> openSettingsSheet(BuildContext context, {String? correo}) async {
                 );
                 if (ok == true) {
                   try {
-                    await ApiUserService().logout();
+                    DatabaseAuthService().logout();
                     if (!context.mounted) return;
                     await Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
                   } catch (e) {
@@ -107,7 +107,6 @@ Future<void> showChangePasswordDialog(BuildContext context, {String? correo}) as
   final newCtrl = TextEditingController();
   final repeatCtrl = TextEditingController();
   bool loading = false;
-  String? error;
 
   await showDialog(
     context: context,
@@ -120,14 +119,6 @@ Future<void> showChangePasswordDialog(BuildContext context, {String? correo}) as
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(error!, style: const TextStyle(color: Colors.redAccent)),
-                  ),
-                ),
               TextFormField(
                 controller: currentCtrl,
                 obscureText: true,
@@ -158,39 +149,19 @@ Future<void> showChangePasswordDialog(BuildContext context, {String? correo}) as
                 ? null
                 : () async {
                     if (!formKey.currentState!.validate()) return;
-                    setLocal(() { loading = true; error = null; });
-                    try {
-                      await ApiUserService().changePassword(
-                        currentPassword: currentCtrl.text,
-                        newPassword: newCtrl.text,
-                      );
-                      if (ctx.mounted) Navigator.of(ctx).pop();
-                      if (context.mounted) {
-                        // Por seguridad, cerramos sesión tras actualizar la contraseña
-                        await ApiUserService().logout();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Contraseña actualizada exitosamente. Por seguridad, vuelve a iniciar sesión.'),
-                            duration: Duration(seconds: 4),
-                          ),
-                        );
-                        await Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
-                      }
-                    } catch (e) {
-                      // Extraer mensaje de error más legible
-                      String errorMsg = e.toString();
-                      if (errorMsg.contains('Contraseña actual incorrecta')) {
-                        errorMsg = 'La contraseña actual es incorrecta';
-                      } else if (errorMsg.contains('diferente a la actual')) {
-                        errorMsg = 'La nueva contraseña debe ser diferente a la actual';
-                      } else if (errorMsg.contains('al menos 6 caracteres')) {
-                        errorMsg = 'La contraseña debe tener al menos 6 caracteres';
-                      } else if (errorMsg.contains('401') || errorMsg.contains('403') || errorMsg.contains('Token')) {
-                        errorMsg = 'Sesión expirada. Por favor, inicia sesión nuevamente';
-                      }
-                      setLocal(() { loading = false; error = errorMsg; });
-                    }
+                    setLocal(() { loading = true; });
+                    
+                    // TODO: Implement password change via Supabase
+                    await Future.delayed(const Duration(milliseconds: 500));
+                    
+                    setLocal(() { loading = false; });
+                    if (!ctx.mounted) return;
+                    Navigator.of(ctx).pop();
+                    
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cambio de contraseña aún no implementado')),
+                    );
                   },
             child: loading
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))

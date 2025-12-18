@@ -1,188 +1,182 @@
 // models/sensor.dart
 import 'package:flutter/material.dart';
 
+/// CatalogoSensor representa un tipo de sensor del catálogo
 class CatalogoSensor {
   final int idSensor;
-  final String nombre;
-  final String? unidad;
-  final String? tipoMedida;
-  final double? rangoMin;
-  final double? rangoMax;
+  final String sensor;
+  final String descripcion;
+  final String? modelo;
+  final String? marca;
+  final String? rangoMedicion;
+  final String? unidadMedida;
 
   CatalogoSensor({
     required this.idSensor,
-    required this.nombre,
-    this.unidad,
-    this.tipoMedida,
-    this.rangoMin,
-    this.rangoMax,
+    required this.sensor,
+    required this.descripcion,
+    this.modelo,
+    this.marca,
+    this.rangoMedicion,
+    this.unidadMedida,
   });
 
   factory CatalogoSensor.fromJson(Map<String, dynamic> json) {
     return CatalogoSensor(
       idSensor: json['id_sensor'] ?? 0,
-      nombre: json['nombre'] ?? '',
-      unidad: json['unidad'],
-      tipoMedida: json['tipo_medida'],
-      rangoMin: json['rango_min']?.toDouble(),
-      rangoMax: json['rango_max']?.toDouble(),
+      sensor: json['sensor'] ?? '',
+      descripcion: json['descripcion'] ?? '',
+      modelo: json['modelo'],
+      marca: json['marca'],
+      rangoMedicion: json['rango_medicion'],
+      unidadMedida: json['unidad_medida'],
     );
   }
 
   Map<String, dynamic> toJson() => {
     'id_sensor': idSensor,
-    'nombre': nombre,
-    'unidad': unidad,
-    'tipo_medida': tipoMedida,
-    'rango_min': rangoMin,
-    'rango_max': rangoMax,
+    'sensor': sensor,
+    'descripcion': descripcion,
+    if (modelo != null) 'modelo': modelo,
+    if (marca != null) 'marca': marca,
+    if (rangoMedicion != null) 'rango_medicion': rangoMedicion,
+    if (unidadMedida != null) 'unidad_medida': unidadMedida,
   };
 
-  // Helper para iconos por tipo
-  IconData get icono {
-    switch (tipoMedida?.toLowerCase()) {
-      case 'temperatura':
-        return Icons.thermostat;
-      case 'ph':
-        return Icons.science;
-      case 'oxigeno_disuelto':
-      case 'oxigeno':
-        return Icons.air;
-      case 'conductividad':
-        return Icons.electrical_services;
-      case 'turbidez':
-        return Icons.visibility;
-      case 'salinidad':
-        return Icons.water_drop;
-      case 'presion':
-        return Icons.compress;
-      default:
-        return Icons.sensors;
-    }
-  }
+  // Getters de compatibilidad
+  String get nombre => sensor;
+  String? get unidad => unidadMedida;
 
-  // Helper para colores por tipo
-  Color get color {
-    switch (tipoMedida?.toLowerCase()) {
-      case 'temperatura':
-        return Colors.orange;
-      case 'ph':
-        return Colors.purple;
-      case 'oxigeno_disuelto':
-      case 'oxigeno':
-        return Colors.blue;
-      case 'conductividad':
-        return Colors.yellow.shade700;
-      case 'turbidez':
-        return Colors.grey;
-      case 'salinidad':
-        return Colors.cyan;
-      case 'presion':
-        return Colors.red;
-      default:
-        return Colors.green;
-    }
-  }
+  IconData get icono => Icons.sensors;
+  Color get color => Colors.blue;
 }
 
+/// SensorInstalado representa una instancia de sensor instalado en una instalación
 class SensorInstalado {
-  final int id;
-  final String? nombre;
-  final String? tipo;
-  final String? parametro;
-  final String? unidad;
-  final String? estado;
-  final String? ultimaLectura;
-  final DateTime? fechaInstalacion;
-  final double? valor;
+  final int idSensorInstalado;
+  final int idInstalacion;
+  final int idSensor;
+  final DateTime fechaInstalada;
+  final String descripcion;
+  final int? idLectura;
+  
+  // Datos del catálogo (pueden venir en JOIN)
+  final String? nombreSensor;
+  final String? unidadMedida;
 
   SensorInstalado({
-    required this.id,
-    this.nombre,
-    this.tipo,
-    this.parametro,
-    this.unidad,
-    this.estado,
-    this.ultimaLectura,
-    this.fechaInstalacion,
-    this.valor,
+    required this.idSensorInstalado,
+    required this.idInstalacion,
+    required this.idSensor,
+    required this.fechaInstalada,
+    required this.descripcion,
+    this.idLectura,
+    this.nombreSensor,
+    this.unidadMedida,
   });
 
-  factory SensorInstalado.fromJson(Map<String, dynamic> j) => SensorInstalado(
-        id: j['id_sensor_instalado'] ?? j['id'] ?? 0,
-        nombre: j['nombre_sensor'] ?? j['alias'] ?? j['nombre'],
-        tipo: j['tipo_sensor'] ?? j['tipo'],
-        parametro: j['parametro'],
-        unidad: j['unidad'],
-        estado: j['estado'],
-        ultimaLectura: j['ultima_lectura'],
-        fechaInstalacion: j['fecha_instalacion'] != null
-            ? DateTime.tryParse(j['fecha_instalacion'].toString())
-            : null,
-        valor: j['valor']?.toDouble(),
-      );
+  factory SensorInstalado.fromJson(Map<String, dynamic> json) {
+    return SensorInstalado(
+      idSensorInstalado: json['id_sensor_instalado'] ?? 0,
+      idInstalacion: json['id_instalacion'] ?? 0,
+      idSensor: json['id_sensor'] ?? 0,
+      fechaInstalada: DateTime.parse(json['fecha_instalada'] ?? DateTime.now().toIso8601String()),
+      descripcion: json['descripcion'] ?? '',
+      idLectura: json['id_lectura'],
+      nombreSensor: json['sensor'] ?? json['nombre_sensor'],
+      unidadMedida: json['unidad_medida'],
+    );
+  }
 
-  // Helper para iconos por tipo de sensor
+  Map<String, dynamic> toJson() => {
+    'id_sensor_instalado': idSensorInstalado,
+    'id_instalacion': idInstalacion,
+    'id_sensor': idSensor,
+    'fecha_instalada': fechaInstalada.toIso8601String(),
+    'descripcion': descripcion,
+    if (idLectura != null) 'id_lectura': idLectura,
+  };
+
+  // Getters de compatibilidad
+  int get id => idSensorInstalado;
+  String? get nombre => nombreSensor ?? descripcion;
+  String? get unidad => unidadMedida;
+}
+
+/// Sensor simple - alias para compatibilidad
+class Sensor {
+  final int idSensor;
+  final int idInstalacion;
+  final String nombre;
+  final String? tipo;
+  final String? unidadMedida;
+  final String? estado;
+
+  Sensor({
+    required this.idSensor,
+    required this.idInstalacion,
+    required this.nombre,
+    this.tipo,
+    this.unidadMedida,
+    this.estado,
+  });
+
+  factory Sensor.fromJson(Map<String, dynamic> json) {
+    return Sensor(
+      idSensor: json['id_sensor_instalado'] ?? json['id_sensor'] ?? json['id'] ?? 0,
+      idInstalacion: json['id_instalacion'] ?? 0,
+      nombre: json['sensor'] ?? json['nombre'] ?? json['descripcion'] ?? '',
+      tipo: json['tipo'],
+      unidadMedida: json['unidad_medida'] ?? json['unidad'],
+      estado: json['estado'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id_sensor': idSensor,
+      'id_instalacion': idInstalacion,
+      'nombre': nombre,
+      if (tipo != null) 'tipo': tipo,
+      if (unidadMedida != null) 'unidad_medida': unidadMedida,
+      if (estado != null) 'estado': estado,
+    };
+  }
+
   IconData get icono {
-    switch (parametro?.toLowerCase()) {
+    switch (tipo?.toLowerCase()) {
       case 'temperatura':
         return Icons.thermostat;
       case 'ph':
         return Icons.science;
-      case 'oxigeno_disuelto':
       case 'oxigeno':
         return Icons.air;
-      case 'conductividad':
-        return Icons.electrical_services;
-      case 'turbidez':
-        return Icons.visibility;
-      case 'salinidad':
-        return Icons.water_drop;
-      case 'presion':
-        return Icons.compress;
       default:
         return Icons.sensors;
     }
   }
 
-  // Helper para colores por tipo
   Color get color {
-    switch (parametro?.toLowerCase()) {
+    switch (tipo?.toLowerCase()) {
       case 'temperatura':
         return Colors.orange;
       case 'ph':
         return Colors.purple;
-      case 'oxigeno_disuelto':
       case 'oxigeno':
         return Colors.blue;
-      case 'conductividad':
-        return Colors.yellow.shade700;
-      case 'turbidez':
-        return Colors.grey;
-      case 'salinidad':
-        return Colors.cyan;
-      case 'presion':
-        return Colors.red;
       default:
-        return Colors.green;
+        return Colors.blue;
     }
   }
 
-  // Estado con colores
   Color get estadoColor {
     switch (estado?.toLowerCase()) {
       case 'activo':
-      case 'online':
         return Colors.green;
       case 'inactivo':
-      case 'offline':
-        return Colors.red;
-      case 'mantenimiento':
-        return Colors.orange;
-      default:
         return Colors.grey;
+      default:
+        return Colors.orange;
     }
   }
-
-  bool get estaActivo => estado?.toLowerCase() == 'activo' || estado?.toLowerCase() == 'online';
 }

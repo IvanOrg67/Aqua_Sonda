@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'widgets/neumorphic.dart';
 import 'widgets/gauge.dart';
-import 'services/api_installaciones_service.dart';
-import 'services/api_user_service.dart';
+import 'services/database_auth_service.dart';
+import 'services/api_service.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/settings_sheet.dart';
+import 'models/instalacion.dart';
 
 class PantallaHome extends StatefulWidget {
   const PantallaHome({super.key});
@@ -14,8 +15,43 @@ class PantallaHome extends StatefulWidget {
 }
 
 class _PantallaHomeState extends State<PantallaHome> {
-  final _apiInst = ApiInstalacionesService();
-  int _reload = 0;
+  final _api = ApiService();
+  final _authService = DatabaseAuthService();
+  List<Instalacion> _instalaciones = [];
+  Map<String, dynamic> _estadisticas = {};
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatos();
+  }
+
+  Future<void> _cargarDatos() async {
+    setState(() => _cargando = true);
+    try {
+      final usuario = await _authService.getUsuarioActual();
+      if (usuario != null) {
+        final instalacionesData = await _api.getInstalaciones(usuario['id_usuario']);
+        final estadisticas = await _api.getEstadisticas(usuario['id_usuario']);
+        setState(() {
+          // Convertir List<Map> a List<Instalacion>
+          _instalaciones = instalacionesData
+              .map((item) => Instalacion.fromJson(item))
+              .toList();
+          _estadisticas = estadisticas;
+          _cargando = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _cargando = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar datos: $e')),
+        );
+      }
+    }
+  }
 
   Future<void> _confirmEliminarInstalacion(Instalacion it) async {
     final scheme = Theme.of(context).colorScheme;
@@ -42,9 +78,9 @@ class _PantallaHomeState extends State<PantallaHome> {
     );
     if (ok == true) {
       try {
-        await _apiInst.eliminar(it.id);
+        await _api.deleteInstalacion(it.idInstalacion);
         if (!mounted) return;
-        setState(() => _reload++);
+        _cargarDatos();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Instalación "${it.nombre}" eliminada')),
         );
@@ -58,13 +94,11 @@ class _PantallaHomeState extends State<PantallaHome> {
 
   Future<void> _crearInstalacionDialog() async {
     final nombreCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
+    final descripcionCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    String tipoUsoSeleccionado = 'acuicultura';
     bool loading = false;
     String? errorText;
-
-    // CAMBIO: usar idEmpresaSucursal
-    int idEmpresaSucursal = 1;
 
     await showDialog(
       context: context,
@@ -79,15 +113,25 @@ class _PantallaHomeState extends State<PantallaHome> {
                 errorText = null;
               });
               try {
-                // CAMBIO: usar nuevo método crear simplificado
-                await _apiInst.crear(
-                  idEmpresaSucursal: idEmpresaSucursal,
-                  nombre: nombreCtrl.text.trim(),
-                  descripcion: descCtrl.text.trim(),
-                );
+                final usuario = await _authService.getUsuarioActual();
+                if (usuario == null) throw Exception('Usuario no autenticado');
+                
+                // Nota: Se requiere id_organizacion_sucursal e id_proceso
+                // Por ahora mostramos error si no están disponibles
+                await _api.createInstalacion({
+                  'id_organizacion_sucursal': 1, // TODO: Obtener de usuario/contexto
+                  'nombre_instalacion': nombreCtrl.text.trim(),
+                  'fecha_instalacion': DateTime.now().toIso8601String().split('T')[0],
+                  'estado_operativo': 'activo',
+                  'descripcion': descripcionCtrl.text.trim().isEmpty 
+                      ? 'Instalación creada desde la app' 
+                      : descripcionCtrl.text.trim(),
+                  'tipo_uso': tipoUsoSeleccionado,
+                  'id_proceso': 1, // TODO: Obtener proceso activo o crear uno
+                });
                 if (!mounted) return;
                 Navigator.of(ctx).pop();
-                setState(() => _reload++);
+                _cargarDatos();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Instalación creada')),
                 );
@@ -103,27 +147,44 @@ class _PantallaHomeState extends State<PantallaHome> {
               title: const Text('Nueva instalación'),
               content: Form(
                 key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nombreCtrl,
-                      decoration: const InputDecoration(labelText: 'Nombre'),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: descCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Descripción (opcional)'),
-                    ),
-                    if (errorText != null) ...[
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nombreCtrl,
+                        decoration: const InputDecoration(labelText: 'Nombre de la instalación'),
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                      ),
                       const SizedBox(height: 10),
-                      Text(errorText!,
-                          style: const TextStyle(color: Colors.red)),
+                      TextFormField(
+                        controller: descripcionCtrl,
+                        decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: tipoUsoSeleccionado,
+                        decoration: const InputDecoration(labelText: 'Tipo de uso'),
+                        items: const [
+                          DropdownMenuItem(value: 'acuicultura', child: Text('Acuicultura')),
+                          DropdownMenuItem(value: 'tratamiento', child: Text('Tratamiento')),
+                          DropdownMenuItem(value: 'otros', child: Text('Otros')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setLocal(() => tipoUsoSeleccionado = value);
+                          }
+                        },
+                      ),
+                      if (errorText != null) ...[
+                        const SizedBox(height: 10),
+                        Text(errorText!,
+                            style: const TextStyle(color: Colors.red)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               actions: [
@@ -189,7 +250,7 @@ class _PantallaHomeState extends State<PantallaHome> {
         );
         if (shouldLogout == true) {
           try {
-            await ApiUserService().logout();
+            _authService.logout();
             if (!mounted) return;
             await Navigator.of(context)
                 .pushNamedAndRemoveUntil('/login', (_) => false);
@@ -204,6 +265,16 @@ class _PantallaHomeState extends State<PantallaHome> {
         appBar: AppBar(
           title: const Text('AquaSense'),
           actions: [
+            IconButton(
+              tooltip: 'Procesos',
+              onPressed: () => Navigator.pushNamed(context, '/procesos'),
+              icon: const Icon(Icons.timeline),
+            ),
+            IconButton(
+              tooltip: 'Especies',
+              onPressed: () => Navigator.pushNamed(context, '/especies'),
+              icon: const Icon(Icons.pets),
+            ),
             IconButton(
               tooltip: 'Alternar tema',
               onPressed: () => ThemeController.instance.toggle(),
@@ -283,57 +354,130 @@ class _PantallaHomeState extends State<PantallaHome> {
                 const SizedBox(height: 10),
                 SizedBox(
                   height: isTablet ? 190 : 170,
-                  child: FutureBuilder<List<Instalacion>>(
-                    key: ValueKey(_reload),
-                    future: _apiInst.listar(),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snap.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              'Error: ${snap.error}',
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error),
-                            ),
-                          ),
-                        );
-                      }
-                      final items = snap.data ?? [];
-                      if (items.isEmpty) {
-                        return const Center(child: Text('Sin instalaciones'));
-                      }
-
-                      return ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, i) {
-                          final it = items[i];
-                          return _InstalacionCard(
-                            instalacion: it,
-                            onTap: () => Navigator.pushNamed(
-                              context,
-                              '/instalacion',
-                              arguments: {
-                                'id_instalacion': it.id,
-                                'nombre_instalacion': it.nombre,
-                                'estado_operativo': 'activo', // CAMBIO: valor fijo
-                                'id_empresa_sucursal': it.idEmpresaSucursal, // CAMBIO
-                                'descripcion': it.descripcion,
-                                'fecha_creacion': it.fechaCreacion, // CAMBIO
-                                'tipo_uso': 'acuicultura', // CAMBIO: valor fijo
+                  child: _cargando
+                      ? const Center(child: CircularProgressIndicator())
+                      : _instalaciones.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.water_drop_outlined, size: 48, color: Colors.grey),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'No tienes instalaciones',
+                                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Presiona + para crear una',
+                                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _instalaciones.length,
+                              itemBuilder: (context, index) {
+                                final instalacion = _instalaciones[index];
+                                return Container(
+                                  width: isTablet ? 280 : 260,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: NeumorphicCard(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                instalacion.nombre,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            PopupMenuButton(
+                                              itemBuilder: (ctx) => [
+                                                PopupMenuItem(
+                                                  value: 'ver',
+                                                  child: Row(
+                                                    children: const [
+                                                      Icon(Icons.visibility, size: 20),
+                                                      SizedBox(width: 8),
+                                                      Text('Ver detalles'),
+                                                    ],
+                                                  ),
+                                                ),
+                                                PopupMenuItem(
+                                                  value: 'eliminar',
+                                                  child: Row(
+                                                    children: const [
+                                                      Icon(Icons.delete, size: 20, color: Colors.red),
+                                                      SizedBox(width: 8),
+                                                      Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                              onSelected: (value) {
+                                                if (value == 'ver') {
+                                                  Navigator.pushNamed(
+                                                    context,
+                                                    '/instalacion-detalle',
+                                                    arguments: instalacion.idInstalacion,
+                                                  );
+                                                } else if (value == 'eliminar') {
+                                                  _confirmEliminarInstalacion(instalacion);
+                                                }
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                instalacion.descripcion.isNotEmpty 
+                                                    ? instalacion.descripcion 
+                                                    : 'Sin descripción',
+                                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 2,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'Tipo: ${instalacion.tipoUso}',
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              'Estado: ${instalacion.estadoOperativo}',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: instalacion.estadoOperativo == 'activo'
+                                                    ? Colors.green
+                                                    : Colors.orange,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
                               },
                             ),
-                            onLongPress: () => _confirmEliminarInstalacion(it),
-                          );
-                        },
-                      );
-                    },
-                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -348,8 +492,8 @@ class _PantallaHomeState extends State<PantallaHome> {
                         child: NeumorphicCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              _StatusSection(),
+                            children: [
+                              _StatusSection(estadisticas: _estadisticas),
                             ],
                           ),
                         ),
@@ -364,7 +508,7 @@ class _PantallaHomeState extends State<PantallaHome> {
                     ],
                   )
                 else ...[
-                  const NeumorphicCard(child: _StatusSection()),
+                  NeumorphicCard(child: _StatusSection(estadisticas: _estadisticas)),
                   const SizedBox(height: 12),
                   NeumorphicCard(child: GaugeSection(gaugeSize: gaugeSize)),
                 ],
@@ -400,7 +544,8 @@ class _StatusRow extends StatelessWidget {
 }
 
 class _StatusSection extends StatelessWidget {
-  const _StatusSection();
+  final Map<String, dynamic> estadisticas;
+  const _StatusSection({required this.estadisticas});
 
   @override
   Widget build(BuildContext context) {
@@ -408,16 +553,25 @@ class _StatusSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Status',
+          'Estadísticas',
           style: Theme.of(context)
               .textTheme
               .titleMedium
               ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        const _StatusRow(label: 'Oxígeno disuelto', value: '54%'),
-        const _StatusRow(label: 'pH', value: '7'),
-        const _StatusRow(label: 'Temperatura', value: '27°C'),
+        _StatusRow(
+          label: 'Instalaciones',
+          value: '${estadisticas['totalInstalaciones'] ?? 0}',
+        ),
+        _StatusRow(
+          label: 'Sensores',
+          value: '${estadisticas['totalSensores'] ?? 0}',
+        ),
+        _StatusRow(
+          label: 'Alertas activas',
+          value: '${estadisticas['alertasActivas'] ?? 0}',
+        ),
       ],
     );
   }
@@ -461,130 +615,6 @@ class GaugeSection extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _InstalacionCard extends StatelessWidget {
-  final Instalacion instalacion;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-  const _InstalacionCard({
-    required this.instalacion,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    final cardW = (w * 0.72).clamp(260.0, 360.0);
-    final h = (cardW * 0.56).clamp(150.0, 200.0);
-
-    // CAMBIO: usar displayLocation de la nueva clase
-    final estado = 'activo'; // valor por defecto
-    final sensores = 0;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        width: cardW,
-        height: h,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0x332196F3), Color(0x3300BCD4)],
-          ),
-          image: const DecorationImage(
-            image: AssetImage(
-              'assets/images/image-1ZoixW91pByrJkUhBuYXIKBFXjMjOG.png',
-            ),
-            fit: BoxFit.cover,
-            opacity: 0.18,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Stack(
-          children: [
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: Neu.concave(
-                      radius: 12,
-                      base: Theme.of(context).colorScheme.surface,
-                    ),
-                    child: Icon(
-                      Icons.pool_rounded,
-                      size: 24,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      instalacion.nombre,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 6,
-              right: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  estado,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 10,
-              right: 10,
-              child: Text(
-                '$sensores sensores',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

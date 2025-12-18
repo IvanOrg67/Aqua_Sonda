@@ -37,3 +37,4 @@ class AppTypography {
         color: Colors.white),
   );
 }
+

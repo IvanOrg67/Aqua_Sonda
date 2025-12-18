@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'models/sensor.dart';
-import 'services/api_sensores_service.dart';
+import 'services/api_service.dart';
+import 'pantalla_lecturas_sensor.dart';
 
 /// Pantalla completa para gestionar sensores de una instalación
 class PantallaSensoresGestion extends StatefulWidget {
@@ -18,8 +19,9 @@ class PantallaSensoresGestion extends StatefulWidget {
 }
 
 class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
-  final _api = ApiSensoresService();
-  late Future<List<SensorInstalado>> _future;
+  final _api = ApiService();
+  
+  late Future<List<Sensor>> _future;
 
   @override
   void initState() {
@@ -29,7 +31,18 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
 
   void _cargarSensores() {
     setState(() {
-      _future = _api.getByInstalacion(widget.idInstalacion);
+      _future = _api.getSensores(widget.idInstalacion).then((data) {
+        return data.map((item) {
+          // Convertir SensorInstalado a Sensor para compatibilidad
+          return Sensor.fromJson({
+            'id_sensor_instalado': item['id_sensor_instalado'],
+            'id_instalacion': item['id_instalacion'],
+            'sensor': item['catalogo_sensores']?['sensor'] ?? item['descripcion'] ?? 'Sensor',
+            'tipo': item['catalogo_sensores']?['sensor'],
+            'unidad_medida': item['catalogo_sensores']?['unidad_medida'],
+          });
+        }).toList();
+      });
     });
   }
 
@@ -45,12 +58,12 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
     );
   }
 
-  Future<void> _confirmarEliminar(SensorInstalado sensor) async {
+  Future<void> _confirmarEliminar(Sensor sensor) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar sensor'),
-        content: Text('¿Eliminar "${sensor.nombre ?? 'Sensor'}"?'),
+        content: Text('¿Eliminar "${sensor.nombre}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -69,7 +82,7 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
 
     if (ok == true) {
       try {
-        await _api.desinstalarSensor(sensor.id);
+        await _api.deleteSensor(sensor.idSensor);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sensor eliminado')),
@@ -101,7 +114,7 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
           ],
         ),
       ),
-      body: FutureBuilder<List<SensorInstalado>>(
+      body: FutureBuilder<List<Sensor>>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -172,7 +185,14 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
                   child: _SensorCard(
                     sensor: sensor,
                     onTap: () {
-                      // TODO: Navegar a detalle del sensor con gráficos
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) => PantallaLecturasSensor(
+                            idSensor: sensor.idSensor,
+                            nombreSensor: sensor.nombre,
+                          ),
+                        ),
+                      );
                     },
                     onDelete: () => _confirmarEliminar(sensor),
                   ),
@@ -193,7 +213,7 @@ class _PantallaSensoresGestionState extends State<PantallaSensoresGestion> {
 
 /// Card individual para cada sensor
 class _SensorCard extends StatelessWidget {
-  final SensorInstalado sensor;
+  final Sensor sensor;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -241,14 +261,14 @@ class _SensorCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          sensor.nombre ?? 'Sensor sin nombre',
+                          sensor.nombre,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          sensor.parametro ?? sensor.tipo ?? 'Sin tipo',
+                          sensor.tipo ?? 'Sin tipo',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withOpacity(0.6),
                           ),
@@ -299,52 +319,16 @@ class _SensorCard extends StatelessWidget {
               
               const SizedBox(height: 12),
               const Divider(height: 1),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               
-              // Valor actual y última lectura
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Valor actual',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        sensor.valor != null
-                            ? '${sensor.valor!.toStringAsFixed(1)} ${sensor.unidad ?? ''}'
-                            : 'Sin datos',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: sensor.color,
-                        ),
-                      ),
-                    ],
+              // Unidad de medida si existe
+              if (sensor.unidadMedida != null)
+                Text(
+                  'Unidad: ${sensor.unidadMedida}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
-                  if (sensor.ultimaLectura != null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Última lectura',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          sensor.ultimaLectura!,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                ],
-              ),
+                ),
             ],
           ),
         ),
@@ -368,95 +352,43 @@ class _DialogoAgregarSensor extends StatefulWidget {
 }
 
 class _DialogoAgregarSensorState extends State<_DialogoAgregarSensor> {
-  final _api = ApiSensoresService();
+  final _api = ApiService();
+  
   final _formKey = GlobalKey<FormState>();
-  final _aliasCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   
-  String? _tipoSeleccionado;
+  int? _sensorCatalogoId;
+  List<Map<String, dynamic>> _catalogoSensores = [];
   bool _loading = false;
+  bool _cargandoCatalogo = true;
   String? _error;
 
-  // Tipos de sensores disponibles para acuicultura
-  final List<Map<String, dynamic>> _tiposSensores = [
-    {
-      'id': 'ph',
-      'nombre': 'pH',
-      'descripcion': 'Acidez/Alcalinidad del agua',
-      'icono': Icons.science,
-      'color': Colors.purple,
-      'unidad': 'pH',
-      'rango': '0-14',
-    },
-    {
-      'id': 'oxigeno_disuelto',
-      'nombre': 'Oxígeno Disuelto',
-      'descripcion': 'Concentración de O₂ en el agua',
-      'icono': Icons.air,
-      'color': Colors.blue,
-      'unidad': 'mg/L',
-      'rango': '0-20',
-    },
-    {
-      'id': 'temperatura',
-      'nombre': 'Temperatura',
-      'descripcion': 'Temperatura del agua',
-      'icono': Icons.thermostat,
-      'color': Colors.orange,
-      'unidad': '°C',
-      'rango': '0-50',
-    },
-    {
-      'id': 'conductividad',
-      'nombre': 'Conductividad',
-      'descripcion': 'Conductividad eléctrica',
-      'icono': Icons.electrical_services,
-      'color': Colors.amber,
-      'unidad': 'µS/cm',
-      'rango': '0-2000',
-    },
-    {
-      'id': 'turbidez',
-      'nombre': 'Turbidez',
-      'descripcion': 'Claridad del agua',
-      'icono': Icons.visibility,
-      'color': Colors.grey,
-      'unidad': 'NTU',
-      'rango': '0-100',
-    },
-    {
-      'id': 'amonio',
-      'nombre': 'Amonio (NH₄⁺)',
-      'descripcion': 'Concentración de amonio',
-      'icono': Icons.water_damage,
-      'color': Colors.green,
-      'unidad': 'mg/L',
-      'rango': '0-10',
-    },
-    {
-      'id': 'nitritos',
-      'nombre': 'Nitritos (NO₂⁻)',
-      'descripcion': 'Concentración de nitritos',
-      'icono': Icons.bubble_chart,
-      'color': Colors.teal,
-      'unidad': 'mg/L',
-      'rango': '0-5',
-    },
-    {
-      'id': 'nitratos',
-      'nombre': 'Nitratos (NO₃⁻)',
-      'descripcion': 'Concentración de nitratos',
-      'icono': Icons.water_drop,
-      'color': Colors.cyan,
-      'unidad': 'mg/L',
-      'rango': '0-100',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _cargarCatalogo();
+  }
+
+  Future<void> _cargarCatalogo() async {
+    try {
+      final sensores = await _api.getCatalogoSensores();
+      setState(() {
+        _catalogoSensores = sensores;
+        _cargandoCatalogo = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Error al cargar catálogo: $e';
+        _cargandoCatalogo = false;
+      });
+    }
+  }
+
 
   Future<void> _agregarSensor() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_tipoSeleccionado == null) {
-      setState(() => _error = 'Selecciona un tipo de sensor');
+    if (_sensorCatalogoId == null) {
+      setState(() => _error = 'Selecciona un sensor del catálogo');
       return;
     }
 
@@ -466,13 +398,13 @@ class _DialogoAgregarSensorState extends State<_DialogoAgregarSensor> {
     });
 
     try {
-      // Por ahora usamos un ID fijo, pero idealmente deberías tener un catálogo en el backend
-      // TODO: Primero crear/obtener el sensor del catálogo, luego instalarlo
-      await _api.instalarSensor(
+      await _api.createSensor(
+        idSensor: _sensorCatalogoId!,
         idInstalacion: widget.idInstalacion,
-        idSensor: 1, // ID temporal - debería venir del catálogo
-        alias: _aliasCtrl.text.trim().isEmpty ? null : _aliasCtrl.text.trim(),
-        descripcion: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+        descripcion: _descCtrl.text.trim().isEmpty 
+            ? 'Sensor instalado' 
+            : _descCtrl.text.trim(),
+        fechaInstalada: DateTime.now(),
       );
 
       if (!mounted) return;
@@ -491,7 +423,6 @@ class _DialogoAgregarSensorState extends State<_DialogoAgregarSensor> {
 
   @override
   void dispose() {
-    _aliasCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
@@ -557,124 +488,142 @@ class _DialogoAgregarSensorState extends State<_DialogoAgregarSensor> {
                     controller: scrollController,
                     padding: const EdgeInsets.all(24),
                     children: [
-                      // Tipo de sensor
+                      // Catálogo de sensores
                       Text(
-                        'Selecciona el tipo de sensor',
+                        'Selecciona un sensor del catálogo',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 12),
                       
-                      ..._tiposSensores.map((tipo) {
-                        final seleccionado = _tipoSeleccionado == tipo['id'];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: InkWell(
-                            onTap: () => setState(() => _tipoSeleccionado = tipo['id']),
+                      if (_cargandoCatalogo)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (_catalogoSensores.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: seleccionado
-                                    ? (tipo['color'] as Color).withOpacity(0.1)
-                                    : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: seleccionado
-                                      ? (tipo['color'] as Color)
-                                      : Colors.transparent,
-                                  width: 2,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber, color: theme.colorScheme.error),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'No hay sensores disponibles en el catálogo. Contacta al administrador.',
+                                  style: TextStyle(color: theme.colorScheme.error),
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: (tipo['color'] as Color).withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(
-                                      tipo['icono'] as IconData,
-                                      color: tipo['color'] as Color,
-                                    ),
+                            ],
+                          ),
+                        )
+                      else
+                        ..._catalogoSensores.map((sensor) {
+                          final seleccionado = _sensorCatalogoId == sensor['id_sensor'];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: InkWell(
+                              onTap: () => setState(() => _sensorCatalogoId = sensor['id_sensor']),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: seleccionado
+                                      ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                                      : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: seleccionado
+                                        ? theme.colorScheme.primary
+                                        : Colors.transparent,
+                                    width: 2,
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          tipo['nombre'],
-                                          style: theme.textTheme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        Text(
-                                          tipo['descripcion'],
-                                          style: theme.textTheme.bodySmall?.copyWith(
-                                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        tipo['unidad'],
-                                        style: theme.textTheme.labelSmall?.copyWith(
-                                          color: tipo['color'] as Color,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
-                                      Text(
-                                        tipo['rango'],
-                                        style: theme.textTheme.labelSmall?.copyWith(
-                                          color: theme.colorScheme.onSurface.withOpacity(0.5),
-                                        ),
+                                      child: Icon(
+                                        Icons.sensors,
+                                        color: theme.colorScheme.primary,
                                       ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            sensor['sensor'] ?? 'Sensor',
+                                            style: theme.textTheme.titleSmall?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          Text(
+                                            sensor['descripcion'] ?? '',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                              color: theme.colorScheme.onSurface.withOpacity(0.6),
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (sensor['unidad_medida'] != null)
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            sensor['unidad_medida'],
+                                            style: theme.textTheme.labelSmall?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          if (sensor['rango_medicion'] != null)
+                                            Text(
+                                              sensor['rango_medicion'],
+                                              style: theme.textTheme.labelSmall?.copyWith(
+                                                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        }),
 
                       const SizedBox(height: 24),
-                      
-                      // Nombre personalizado
-                      TextFormField(
-                        controller: _aliasCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Nombre del sensor (opcional)',
-                          hintText: 'Ej: Sensor pH - Estanque Norte',
-                          prefixIcon: const Icon(Icons.label_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
                       
                       // Descripción
                       TextFormField(
                         controller: _descCtrl,
                         decoration: InputDecoration(
-                          labelText: 'Descripción (opcional)',
-                          hintText: 'Ubicación o notas adicionales',
+                          labelText: 'Descripción del sensor instalado',
+                          hintText: 'Ej: Sensor principal de temperatura - Estanque Norte',
                           prefixIcon: const Icon(Icons.notes_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                         maxLines: 3,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                       ),
 
                       if (_error != null) ...[

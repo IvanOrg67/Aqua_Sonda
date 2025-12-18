@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'services/api_user_service.dart';
+import 'services/database_auth_service.dart';
 
 class PantallaRegistro extends StatefulWidget {
   const PantallaRegistro({super.key});
@@ -14,6 +14,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   final _correoCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _telCtrl = TextEditingController();
+  final _authService = DatabaseAuthService();
   bool _loading = false;
   String? _error;
 
@@ -21,30 +22,44 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      final user = await ApiUserService().register(
+      print('📝 Iniciando registro...');
+      print('Correo: ${_correoCtrl.text.trim()}');
+      print('Nombre: ${_nombreCtrl.text.trim()}');
+      
+      final userData = await _authService.register(
         nombreCompleto: _nombreCtrl.text.trim(),
         correo: _correoCtrl.text.trim(),
         password: _passCtrl.text,
         telefono: _telCtrl.text.isEmpty ? null : _telCtrl.text.trim(),
-        idRol: 2, // admin_cuenta por defecto (compatible con backend)
       );
+      
       if (!mounted) return;
-      // Ir directo al home con sesión iniciada
+      
+      print('✅ Usuario registrado: ${userData['id_usuario']}');
+      print('📊 Datos obtenidos: $userData');
+      
+      // Ir directamente al home
       Navigator.pushReplacementNamed(
         context,
         '/home',
         arguments: {
-          'nombre': user.nombre,
-          'rol': 'Usuario',
-          'correo': user.correo,
+          'nombre': userData['nombre_completo'] ?? 'Usuario',
+          'rol': userData['nombre_rol'] ?? 'Usuario',
+          'correo': userData['correo'] ?? '',
         },
       );
     } catch (e) {
-      setState(() { _error = e.toString(); });
+      print('❌ Error en registro: $e');
+      setState(() { 
+        _error = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('AuthException: ', ''); 
+      });
     } finally {
       if (mounted) setState(() { _loading = false; });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -88,8 +103,19 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                       hintText: 'tucorreo@dominio.com',
                       prefixIcon: Icon(Icons.alternate_email),
                     ),
-                    validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Ingresa tu correo' : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Ingresa tu correo';
+                      }
+                      // Validación mejorada de email
+                      final emailRegex = RegExp(
+                        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                      );
+                      if (!emailRegex.hasMatch(v.trim())) {
+                        return 'Correo inválido';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
