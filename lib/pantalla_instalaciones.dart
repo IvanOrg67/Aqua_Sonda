@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
 import 'widgets/neumorphic.dart';
-import 'services/api_installaciones_service.dart';
+import 'services/database_auth_service.dart';
+import 'services/api_service.dart';
+import 'models/instalacion.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/settings_sheet.dart';
 
@@ -13,7 +15,8 @@ class PantallaInstalaciones extends StatefulWidget {
 }
 
 class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
-  final _api = ApiInstalacionesService();
+  final _api = ApiService();
+  final _authService = DatabaseAuthService();
   late Future<List<Instalacion>> _future;
   static const String _cardBg =
       'assets/images/image-aNvpXQcowFLBnfeDs2JfYaMI2hEiM5.png';
@@ -21,13 +24,20 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
   @override
   void initState() {
     super.initState();
-    _future = _api.listar();
+    _future = _load();
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = _api.listar();
+      _future = _load();
     });
+  }
+
+  Future<List<Instalacion>> _load() async {
+    final user = await _authService.getUsuarioActual();
+    if (user == null) return [];
+    final data = await _api.getInstalaciones(user['id_usuario']);
+    return data.map((item) => Instalacion.fromJson(item)).toList();
   }
 
   Future<void> _confirmEliminar(BuildContext context, Instalacion it) async {
@@ -55,7 +65,7 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
     );
     if (ok == true) {
       try {
-        await _api.eliminar(it.id);
+        await _api.deleteInstalacion(it.idInstalacion);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Instalación "${it.nombre}" eliminada')),
@@ -135,18 +145,14 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
                 height: cardHeight,
                 backgroundAsset: _cardBg,
                 onTap: () {
-                  // CAMBIO: usar nuevos nombres de campos
                   Navigator.pushNamed(
                     context,
                     '/instalacion',
                     arguments: {
-                      'id_instalacion': it.id,
-                      'nombre_instalacion': it.nombre,
-                      'estado_operativo': 'activo', // valor por defecto
-                      'id_empresa_sucursal': it.idEmpresaSucursal, // CAMBIO
-                      'descripcion': it.descripcion,
-                      'fecha_creacion': it.fechaCreacion, // CAMBIO
-                      'tipo_uso': 'acuicultura', // valor por defecto
+                      'id_instalacion': it.idInstalacion,
+                      'nombre_instalacion': it.nombreInstalacion,
+                      'estado_operativo': it.estadoOperativo,
+                      'tipo_uso': it.tipoUso,
                     },
                   );
                 },
@@ -158,13 +164,19 @@ class _PantallaInstalacionesState extends State<PantallaInstalaciones> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // CAMBIO: implementar creación directa
           try {
-            await _api.crear(
-              idEmpresaSucursal: 1,
-              nombre: 'Nueva Instalación',
-              descripcion: 'Instalación creada desde lista',
-            );
+            final user = await _authService.getUsuarioActual();
+            if (user == null) throw Exception('Usuario no autenticado');
+
+            await _api.createInstalacion({
+              'id_organizacion_sucursal': 1, // TODO: Obtener de contexto
+              'nombre_instalacion': 'Nueva Instalación',
+              'fecha_instalacion': DateTime.now().toIso8601String().split('T')[0],
+              'estado_operativo': 'activo',
+              'descripcion': 'Instalación creada desde la app',
+              'tipo_uso': 'acuicultura',
+              'id_proceso': 1, // TODO: Obtener proceso activo
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Instalación creada')),
             );
@@ -271,7 +283,7 @@ class _InstalacionCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'activo', // CAMBIO: valor por defecto
+                          instalacion.estadoOperativo,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onTertiaryContainer,
                             fontWeight: FontWeight.w700,
@@ -311,7 +323,9 @@ class _InstalacionCard extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  instalacion.displayLocation, // CAMBIO: usar displayLocation
+                                  instalacion.descripcion.isNotEmpty 
+                                      ? instalacion.descripcion 
+                                      : 'Sin descripción',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

@@ -76,15 +76,28 @@ class SensorInstalado {
   });
 
   factory SensorInstalado.fromJson(Map<String, dynamic> json) {
+    // La BD devuelve fecha_instalada como 'YYYY-MM-DD' (solo fecha)
+    DateTime fechaInstalada;
+    final fechaStr = json['fecha_instalada'] as String?;
+    if (fechaStr != null) {
+      if (fechaStr.length == 10) {
+        fechaInstalada = DateTime.parse('${fechaStr}T00:00:00');
+      } else {
+        fechaInstalada = DateTime.parse(fechaStr);
+      }
+    } else {
+      fechaInstalada = DateTime.now();
+    }
+
     return SensorInstalado(
       idSensorInstalado: json['id_sensor_instalado'] ?? 0,
       idInstalacion: json['id_instalacion'] ?? 0,
       idSensor: json['id_sensor'] ?? 0,
-      fechaInstalada: DateTime.parse(json['fecha_instalada'] ?? DateTime.now().toIso8601String()),
+      fechaInstalada: fechaInstalada,
       descripcion: json['descripcion'] ?? '',
       idLectura: json['id_lectura'],
-      nombreSensor: json['sensor'] ?? json['nombre_sensor'],
-      unidadMedida: json['unidad_medida'],
+      nombreSensor: json['catalogo_sensores']?['sensor'] ?? json['sensor'] ?? json['nombre_sensor'],
+      unidadMedida: json['catalogo_sensores']?['unidad_medida'] ?? json['unidad_medida'],
     );
   }
 
@@ -92,7 +105,7 @@ class SensorInstalado {
     'id_sensor_instalado': idSensorInstalado,
     'id_instalacion': idInstalacion,
     'id_sensor': idSensor,
-    'fecha_instalada': fechaInstalada.toIso8601String(),
+    'fecha_instalada': fechaInstalada.toIso8601String().split('T')[0], // Solo fecha YYYY-MM-DD
     'descripcion': descripcion,
     if (idLectura != null) 'id_lectura': idLectura,
   };

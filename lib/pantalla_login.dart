@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'theme/app_colors.dart';
-import 'services/api_user_service.dart';
+import 'services/database_auth_service.dart';
 
 class PantallaLogin extends StatefulWidget {
   const PantallaLogin({super.key});
@@ -13,7 +13,7 @@ class PantallaLogin extends StatefulWidget {
 class _PantallaLoginState extends State<PantallaLogin>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  final _apiUser = ApiUserService();
+  final _authService = DatabaseAuthService();
   bool _cargando = false;
 
   final _formKey = GlobalKey<FormState>();
@@ -24,37 +24,36 @@ class _PantallaLoginState extends State<PantallaLogin>
   Future<void> _hacerLogin(String correo, String password) async {
     setState(() => _cargando = true);
     try {
-      final usuario =
-          await _apiUser.login(correo: correo.trim(), password: password);
+      print('🔑 Iniciando login con: $correo');
+      
+      final userData = await _authService.login(
+        correo: correo.trim(),
+        password: password,
+      );
+
       if (!mounted) return;
 
-      // Obtenemos el nombre del rol desde el ID
-      String rol = 'Usuario';
-      switch (usuario.idRol) {
-        case 1:
-          rol = 'Administrador';
-          break;
-        case 2:
-          rol = 'Supervisor';
-          break;
-        case 3:
-          rol = 'Operador';
-          break;
-      }
+      print('✅ Usuario logueado: ${userData['id_usuario']}');
+      print('📊 Datos del usuario: $userData');
 
       Navigator.pushReplacementNamed(
         context,
         '/home',
         arguments: {
-          'nombre': usuario.nombre,
-          'rol': rol,
-          'correo': usuario.correo,
+          'nombre': userData['nombre_completo'] ?? 'Usuario',
+          'rol': userData['nombre_rol'] ?? 'Usuario',
+          'correo': userData['correo'] ?? '',
         },
       );
     } catch (e) {
       if (!mounted) return;
+      print('❌ Error en login: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al iniciar sesión: $e')),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
       );
     } finally {
       if (mounted) setState(() => _cargando = false);
